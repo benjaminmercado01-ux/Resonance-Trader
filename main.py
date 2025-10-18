@@ -1,29 +1,51 @@
 # main.py
 from fastapi import FastAPI, Query
 from coinsph_client import CoinsPHClient
+import requests
+import os
 
-app = FastAPI(title="Coins.PH Trading API")
+# --- Get and print Render server IP ---
+try:
+    ip = requests.get("https://ifconfig.me").text.strip()
+    print(f"🛰️ Render outbound IP address: {ip}")
+except Exception as e:
+    print("⚠️ Could not fetch outbound IP:", e)
 
+# --- Initialize app ---
+app = FastAPI()
+
+# --- Initialize CoinsPH client with environment variables ---
+COINS_API_KEY = os.getenv("COINS_API_KEY")
+COINS_API_SECRET = os.getenv("COINS_API_SECRET")
+client = CoinsPHClient(COINS_API_KEY, COINS_API_SECRET)
+
+# --- Basic health check route ---
 @app.get("/")
 def root():
     return {"message": "Coins.PH API running on Render ✅"}
 
+# --- Get balance ---
 @app.get("/balance")
 def get_balance():
-    client = CoinsPHClient()
-    return client.account()
+    return client.get_balance()
 
+# --- Get ticker (market prices) ---
 @app.get("/ticker")
-def ticker(symbol: str = Query(..., description="e.g. WLD-PHP")):
-    client = CoinsPHClient()
-    return client.ticker(symbol)
+def get_ticker(symbol: str = Query(...)):
+    return client.get_ticker(symbol)
 
+# --- Get orderbook ---
 @app.get("/orderbook")
-def orderbook(symbol: str = Query(...)):
-    client = CoinsPHClient()
-    return client.orderbook(symbol)
+def get_orderbook(symbol: str = Query(...)):
+    return client.get_orderbook(symbol)
 
-@app.post("/trade")
-def trade(symbol: str, side: str, otype: str, qty: float, price: float = None):
-    client = CoinsPHClient()
-    return client.place_order(symbol, side.upper(), otype.upper(), qty, price)
+# --- Place trade ---
+@app.get("/trade")
+def trade(
+    symbol: str = Query(...),
+    side: str = Query(..., regex="^(BUY|SELL)$"),
+    otype: str = Query(..., regex="^(LIMIT|MARKET)$"),
+    qty: float = Query(...),
+    price: float = Query(None)
+):
+    return client.place_order(symbol, side, otype, qty, price)
